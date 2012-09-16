@@ -12,7 +12,7 @@
  */
 
 /**
- * Some constants for request keys
+ * A sequence of messages stored in a byte buffer
  *
  * @category Libraries
  * @package  Kafka
@@ -20,11 +20,19 @@
  * @license  http://www.apache.org/licenses/LICENSE-2.0 Apache License, Version 2.0
  * @link     http://sna-projects.com/kafka/
  */
-class Kafka_RequestKeys
+class Kafka_MessageSetInternalIterator extends Kafka_MessageSet
 {
-	const PRODUCE      = 0;
-	const FETCH        = 1;
-	const MULTIFETCH   = 2;
-	const MULTIPRODUCE = 3;
-	const OFFSETS      = 4;
+	/**
+	 * Read the next message. 
+	 * Override the parent method: we don't want to increment the byte offset 
+	 *
+	 * @return string Message (raw)
+	 * @throws Kafka_Exception when the message cannot be read from the stream buffer
+	 */
+	protected function getMessage() {
+		$msg = parent::getMessage();
+		// do not increment the offset for internal iterators
+		$this->validByteCount = 0;
+		return $msg;
+	}
 }

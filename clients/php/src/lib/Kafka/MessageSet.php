@@ -5,7 +5,7 @@
  * @category  Libraries
  * @package   Kafka
  * @author    Lorenzo Alberton <l.alberton@quipo.it>
- * @copyright 2011 Lorenzo Alberton
+ * @copyright 2012 Lorenzo Alberton
  * @license   http://www.apache.org/licenses/LICENSE-2.0 Apache License, Version 2.0
  * @version   $Revision: $
  * @link      http://sna-projects.com/kafka/
@@ -21,7 +21,17 @@
  * @link     http://sna-projects.com/kafka/
  */
 class Kafka_MessageSet implements Iterator
-{	
+{
+	/**
+	 * @var Kafka_Socket
+	 */
+	protected $socket = null;
+
+	/**
+	 * @var integer
+	 */
+	protected $initialOffset = 0;
+
 	/**
 	 * @var integer
 	 */
@@ -33,28 +43,58 @@ class Kafka_MessageSet implements Iterator
 	private $valid = false;
 	
 	/**
-	 * @var array
+	 * @var Kafka_Message
 	 */
-	private $array = array();
+	private $msg;
+
+	/**
+	 * @var Kafka_MessageSetInternalIterator
+	 */
+	private $internalIterator = null;
 	
 	/**
 	 * Constructor
 	 * 
-	 * @param resource $stream    Stream resource
-	 * @param integer  $errorCode Error code
+	 * @param Kafka_Socket $socket        Stream resource
+	 * @param integer      $initialOffset Initial offset
 	 */
-	public function __construct($stream, $errorCode = 0) {
-		$data = stream_get_contents($stream);
-		$len = strlen($data);
-		$ptr = 0;
-		while ($ptr <= ($len - 4)) {
-			$size = array_shift(unpack('N', substr($data, $ptr, 4)));
-			$ptr += 4;
-			$this->array[] = new Kafka_Message(substr($data, $ptr, $size));
-			$ptr += $size;
-			$this->validByteCount += 4 + $size;
+	public function __construct(Kafka_Socket $socket, $initialOffset = 0) {
+		$this->socket        = $socket;
+		$this->initialOffset = $initialOffset;
+	}
+
+	/**
+	 * Read the size of the next message (4 bytes)
+	 *
+	 * @return integer Size of the response buffer in bytes
+	 * @throws Kafka_Exception when size is <=0 or >= $maxSize
+	 */
+	protected function getMessageSize() {
+		$size = array_shift(unpack('N', $this->socket->read(4, true)));
+		if ($size <= 0) {
+			throw new Kafka_Exception_OutOfRange($size . ' is not a valid message size');
 		}
-		fclose($stream);
+		// TODO check if $size is too large
+		return $size;
+	}
+
+	/**
+	 * Read the next message 
+	 *
+	 * @return string Message (raw)
+	 * @throws Kafka_Exception when the message cannot be read from the stream buffer
+	 */
+	protected function getMessage() {
+		try {
+			$size = $this->getMessageSize();
+			$msg = $this->socket->read($size, true);
+		} catch (Kafka_Exception_Socket_EOF $e) {
+			$size = isset($size) ? $size : 'enough';
+			$logMsg = 'Cannot read ' . $size . ' bytes, the message is likely bigger than the buffer';
+			throw new Kafka_Exception_OutOfRange($logMsg);
+		}
+		$this->validByteCount += 4 + $size;
+		return $msg;
 	}
 	
 	/**
@@ -81,8 +121,15 @@ class Kafka_MessageSet implements Iterator
 	 * @return void
 	 */
 	public function next() {
-		$this->valid = (FALSE !== next($this->array)); 
-	}	
+		if (null !== $this->internalIterator) {
+			$this->internalIterator->next();
+		 	if ($this->internalIterator->valid()) {
+		 		return;
+		 	}
+		}
+		$this->internalIterator = null;
+		$this->preloadNextMessage();
+	}
 	
 	/**
 	 * valid
@@ -99,7 +146,7 @@ class Kafka_MessageSet implements Iterator
 	 * @return integer
 	 */
 	public function key() {
-		return key($this->array); 
+		return $this->validByteCount; 
 	}
 	
 	/**
@@ -108,15 +155,41 @@ class Kafka_MessageSet implements Iterator
 	 * @return Kafka_Message 
 	 */
 	public function current() {
-		return current($this->array);
+		if (null !== $this->internalIterator && $this->internalIterator->valid()) {
+			return $this->internalIterator->current();
+		}
+		return $this->msg;
 	}
 	
 	/**
-	 * rewind
+	 * rewind - Cannot use fseek()
 	 * 
 	 * @return void
 	 */
 	public function rewind() {
-		$this->valid = (FALSE !== reset($this->array)); 
+		$this->internalIterator = null;
+		$this->validByteCount = 0;
+		$this->preloadNextMessage();
+	}
+
+	/**
+	 * Preload the next message
+	 * 
+	 * @return void
+	 */
+	private function preloadNextMessage() {
+		try {
+			$this->msg = new Kafka_Message($this->getMessage());
+			if ($this->msg->compression() != Kafka_Encoder::COMPRESSION_NONE) {
+				$this->internalIterator = $this->msg->payload();
+				$this->internalIterator->rewind();
+				$this->msg = null;
+			} else {
+				$this->internalIterator = null;
+			}
+			$this->valid = TRUE;
+		} catch (Kafka_Exception_OutOfRange $e) {
+			$this->valid = FALSE;
+		}
 	}
 }

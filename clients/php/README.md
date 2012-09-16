@@ -9,7 +9,11 @@ You need to have access to your Kafka instance and be able to connect through TC
 Add the lib directory to the include_path and use an autoloader like the one in the examples directory (the code follows the PEAR/Zend one-class-per-file convention).
 
 ## Usage
-The examples directory contains an example of a Producer and a Consumer.
+The examples directory contains an example of a Producer and a simple Consumer, and an example of the Zookeeper-based Consumer.
+
+## TODO
+
+- support for Snappy compression
 
 ## Contact for questions
 

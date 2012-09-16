@@ -5,7 +5,7 @@
  * @category  Libraries
  * @package   Kafka
  * @author    Lorenzo Alberton <l.alberton@quipo.it>
- * @copyright 2011 Lorenzo Alberton
+ * @copyright 2012 Lorenzo Alberton
  * @license   http://www.apache.org/licenses/LICENSE-2.0 Apache License, Version 2.0
  * @version   $Revision: $
  * @link      http://sna-projects.com/kafka/
@@ -28,9 +28,9 @@ class Kafka_Producer
 	protected $request_key;
 
 	/**
-	 * @var resource
+	 * @var Kafka_Socket
 	 */
-	protected $conn;
+	protected $socket;
 	
 	/**
 	 * @var string
@@ -43,30 +43,36 @@ class Kafka_Producer
 	protected $port;
 
 	/**
+	 * Compression: 0=none; 1=gzip; 2=snappy
+	 *
+     * @var integer
+	 */
+	protected $compression;
+
+	/**
 	 * Constructor
 	 * 
 	 * @param integer $host Host 
 	 * @param integer $port Port
 	 */
-	public function __construct($host, $port) {
-		$this->request_key = 0;
-		$this->host = $host;
-		$this->port = $port;
+	public function __construct($host, $port, $compression = Kafka_Encoder::COMPRESSION_GZIP) {
+		$this->request_key = Kafka_RequestKeys::PRODUCE;
+		$this->host        = $host;
+		$this->port        = $port;
+		$this->compression = $compression;
 	}
 	
 	/**
 	 * Connect to Kafka via a socket
 	 * 
 	 * @return void
-	 * @throws RuntimeException
+	 * @throws Kafka_Exception
 	 */
 	public function connect() {
-		if (!is_resource($this->conn)) {
-			$this->conn = stream_socket_client('tcp://' . $this->host . ':' . $this->port, $errno, $errstr);
+		if (null === $this->socket) {
+			$this->socket = new Kafka_Socket($this->host, $this->port);
 		}
-		if (!is_resource($this->conn)) {
-			throw new RuntimeException('Cannot connect to Kafka: ' . $errstr, $errno);
-		}
+		$this->socket->connect();
 	}
 
 	/**
@@ -75,8 +81,8 @@ class Kafka_Producer
 	 * @return void
 	 */
 	public function close() {
-		if (is_resource($this->conn)) {
-			fclose($this->conn);
+		if (null !== $this->socket) {
+			$this->socket->close();
 		}
 	}
 
@@ -91,7 +97,7 @@ class Kafka_Producer
 	 */
 	public function send(array $messages, $topic, $partition = 0xFFFFFFFF) {
 		$this->connect();
-		return fwrite($this->conn, Kafka_Encoder::encode_produce_request($topic, $partition, $messages));
+		return $this->socket->write(Kafka_Encoder::encode_produce_request($topic, $partition, $messages, $this->compression));
 	}
 
 	/**
@@ -102,7 +108,7 @@ class Kafka_Producer
 	 */
 	public function __sleep() {
 		$this->close();
-		return array('request_key', 'host', 'port');
+		return array('request_key', 'host', 'port', 'compression');
 	}
 
 	/**

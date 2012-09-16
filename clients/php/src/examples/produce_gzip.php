@@ -32,7 +32,7 @@ $host = 'localhost';
 $port = 9092;
 $topic = 'test';
 
-$producer = new Kafka_Producer($host, $port, Kafka_Encoder::COMPRESSION_NONE);
+$producer = new Kafka_Producer($host, $port, Kafka_Encoder::COMPRESSION_GZIP);
 $in = fopen('php://stdin', 'r');
 while (true) {
 	echo "\nEnter comma separated messages:\n";

@@ -5,7 +5,7 @@
  * @category  Libraries
  * @package   Kafka
  * @author    Lorenzo Alberton <l.alberton@quipo.it>
- * @copyright 2011 Lorenzo Alberton
+ * @copyright 2012 Lorenzo Alberton
  * @license   http://www.apache.org/licenses/LICENSE-2.0 Apache License, Version 2.0
  * @version   $Revision: $
  * @link      http://sna-projects.com/kafka/
@@ -22,16 +22,6 @@
  */
 class Kafka_FetchRequest extends Kafka_Request
 {
-	/**
-	 * @var string
-	 */
-	private $topic;
-	
-	/**
-	 * @var integer
-	 */
-	private $partition;
-	
 	/**
 	 * @var integer
 	 */
@@ -63,18 +53,13 @@ class Kafka_FetchRequest extends Kafka_Request
 	 * 
 	 * @return void
 	 */
-	public function writeTo($stream) {
-		//echo "\nWriting request to stream: " . (string)$this;
-		// <topic size: short> <topic: bytes>
-		fwrite($stream, pack('n', strlen($this->topic)) . $this->topic);
-		// <partition: int> <offset: Long> <maxSize: int>
-		fwrite($stream, pack('N', $this->partition));
-		
-//TODO: need to store a 64bit integer (bigendian), but PHP only supports 32bit integers: 
-//setting first 32 bits to 0
-		fwrite($stream, pack('N2', 0, $this->offset));
-		fwrite($stream, pack('N', $this->maxSize));
-		//echo "\nWritten request to stream: " .(string)$this;
+	public function writeTo(Kafka_Socket $socket) {
+		$this->writeRequestHeader($socket);
+
+		// OFFSET (long)
+		$socket->write(self::packLong64bigendian($this->offset));
+		// MAX_SIZE (int)
+		$socket->write(pack('N', $this->maxSize));
 	}
 	
 	/**
@@ -83,6 +68,7 @@ class Kafka_FetchRequest extends Kafka_Request
 	 * @return integer
 	 */
 	public function sizeInBytes() {
+		// <topic_len> + <topic> + <partition> + <offset> + <max_size>
 		return 2 + strlen($this->topic) + 4 + 8 + 4;
 	}
 	
@@ -118,9 +104,7 @@ class Kafka_FetchRequest extends Kafka_Request
 	 * 
 	 * @return string
 	 */
-	public function __toString()
-	{
+	public function __toString() {
 		return 'topic:' . $this->topic . ', part:' . $this->partition . ' offset:' . $this->offset . ' maxSize:' . $this->maxSize;
 	}
 }
-

@@ -12,7 +12,7 @@
  */
 
 /**
- * Some constants for request keys
+ * Base exception class
  *
  * @category Libraries
  * @package  Kafka
@@ -20,11 +20,7 @@
  * @license  http://www.apache.org/licenses/LICENSE-2.0 Apache License, Version 2.0
  * @link     http://sna-projects.com/kafka/
  */
-class Kafka_RequestKeys
+class Kafka_Exception extends RuntimeException
 {
-	const PRODUCE      = 0;
-	const FETCH        = 1;
-	const MULTIFETCH   = 2;
-	const MULTIPRODUCE = 3;
-	const OFFSETS      = 4;
+
 }
