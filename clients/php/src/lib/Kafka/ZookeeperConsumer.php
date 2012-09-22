@@ -255,7 +255,7 @@ class Kafka_ZookeeperConsumer implements Iterator
 		}
 		$totalSize = 0;
 		foreach ($this->iterators as $it) {
-			$readBytes = $it->uncommittedOffset;
+			$readBytes = $it->offset + $it->uncommittedOffset;
 			if (null !== $it->messages) {
 				$readBytes += $it->messages->validBytes();
 			}
